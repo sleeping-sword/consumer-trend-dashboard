@@ -4,6 +4,12 @@ import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 import numpy as np
 
+def mechine_learning_model(data, select):
+    # 假設這是一個簡單的線性回歸模型來預測消費趨勢
+    for word in select['欄位']:
+        print(word)
+
+
 st.set_page_config(page_title="消費趨勢智慧分析平台", layout="wide")
 
 st.title("📊 消費趨勢智慧分析平台")
@@ -23,7 +29,35 @@ if page == "可預測消費趨勢模型":
         df = pd.read_csv(uploaded_file)
         st.write("✅ 已成功讀取資料：")
         st.dataframe(df.head())
+        row_values = df.values.flatten()
+        new_df = pd.DataFrame([row_values])
 
+                    # 3️⃣ 行列互換
+        transposed_df = df.head(5)
+        transposed_df = transposed_df.T  # 行列互換
+        transposed_df.reset_index(inplace=True)  # 把 index 變成欄位
+        transposed_df.rename(columns={"index": "欄位"}, inplace=True)  # 改名
+            
+            # 4️⃣ 加上行選取欄位
+        transposed_df["_selected"] = False
+
+            # 5️⃣ 顯示 DataEditor
+        edited = st.data_editor(
+                transposed_df,
+                hide_index=True,
+                width="stretch",
+                column_config={
+                    "_selected": st.column_config.CheckboxColumn("選取這行")
+                },
+                key="editor",
+            )
+
+            # 6️⃣ 取得選取的行
+        selected_rows = edited[edited["_selected"] == True]
+
+        st.subheader("你選到的『行』：")
+        st.dataframe(selected_rows)
+        mechine_learning_model(df, selected_rows)
         # 日期欄位處理
         if 'date' in df.columns:
             df['date'] = pd.to_datetime(df['date'])
