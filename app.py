@@ -68,28 +68,33 @@ if page == "可預測消費趨勢模型":
         st.dataframe(selected_rows)
         mechine_learning_model(df, selected_rows)
         # 日期欄位處理
-        if 'date' in df.columns:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.sort_values('date')
-            df['time_index'] = np.arange(len(df))
-        elif '月份' in df.columns:
+        # 日期欄位處理（自動辨識大小寫）
+
+        date_cols = [col for col in df.columns if col.lower() == 'date' or col == '月份']
+        if date_cols:
+            date_col = date_cols[0]  # 抓第一個符合的欄位名稱
+            if date_col.lower() == 'date':
+                df[date_col] = pd.to_datetime(df[date_col])
+            df = df.sort_values(date_col)
             df['time_index'] = np.arange(len(df))
         else:
-            st.error("❌ 必須包含欄位 'date' 或 '月份'")
+            st.error("❌ 必須包含欄位 'date'、'Date' 或 '月份'")
             st.stop()
 
-        # 趨勢線回歸預測
-        if 'sales' in df.columns:
+        # 趨勢線回歸預測（支援大小寫與同義字）
+        sales_cols = [col for col in df.columns if any(k in col.lower() for k in ['sale', 'sales', 'revenue', 'amount', 'profit', '銷售', '營收'])]
+        if sales_cols:
+            sales_col = sales_cols[0]  # 抓第一個符合的欄位名稱
             model = LinearRegression()
             X = df[['time_index']]
-            y = df['sales']
+            y = df[sales_col]
             model.fit(X, y)
             next_idx = [[len(df)]]
             prediction = model.predict(next_idx)[0]
-
+        
             # 畫圖
             fig, ax = plt.subplots(figsize=(8, 4))
-            ax.plot(df['time_index'], df['sales'], marker='o', label='實際銷售量')
+            ax.plot(df['time_index'], df[sales_col], marker='o', label='實際銷售量')
             ax.plot(df['time_index'], model.predict(X), linestyle='--', color='orange', label='回歸趨勢線')
             ax.scatter(len(df), prediction, color='red', label='下一期預測')
             ax.set_xlabel("時間")
@@ -97,12 +102,11 @@ if page == "可預測消費趨勢模型":
             ax.set_title("銷售趨勢預測")
             ax.legend()
             st.pyplot(fig)
-
+        
             st.success(f"📅 下一期預測銷售量：約為 **{prediction:.0f}** 單位")
         else:
-            st.error("❌ 必須包含欄位 'sales'")
-    else:
-        st.info("請先上傳資料檔以開始分析。")
+            st.error("❌ 必須包含與銷售相關的欄位（如 'Sales', 'sale', '銷售額', '營收' 等）")
+
 
 # === 功能二：分析市場趨勢 ===
 elif page == "分析市場趨勢":
