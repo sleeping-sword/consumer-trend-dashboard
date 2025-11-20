@@ -12,6 +12,128 @@ fm.fontManager.addfont(font_path)
 matplotlib.rcParams['font.sans-serif'] = ['Noto Sans TC']
 matplotlib.rcParams['axes.unicode_minus'] = False
 
+'''
+LSTM模型
+class LSTMModel(nn.Module):
+    def __init__(self, input_size, hidden_size=32, num_layers=1, output_size=1):
+        super(LSTMModel, self).__init__()
+        self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, batch_first=True)
+        self.fc = nn.Linear(hidden_size, output_size)
+
+    def forward(self, x):
+        out, _ = self.lstm(x)
+        out = out[:, -1, :]  # 取最後一個時間步的輸出
+        out = self.fc(out)
+        return out
+
+# -------------------------
+# 訓練函式
+# -------------------------
+def train_lstm(df, feature_cols, target_col='SalesQty', seq_length=10, epochs=50, lr=0.01, model_path="lstm_model.pth"):
+    """
+    訓練 LSTM 模型並保存
+    """
+    # 選擇數值型欄位
+    features_df = df[feature_cols].select_dtypes(include=[np.number])
+    target_df = df[[target_col]].select_dtypes(include=[np.number])
+    
+    # 標準化
+    scaler_X = MinMaxScaler()
+    scaler_y = MinMaxScaler()
+    X_scaled = scaler_X.fit_transform(features_df)
+    y_scaled = scaler_y.fit_transform(target_df)
+    
+    # 建立序列資料
+    X, y = [], []
+    for i in range(len(X_scaled) - seq_length):
+        X.append(X_scaled[i:i+seq_length])
+        y.append(y_scaled[i+seq_length, 0])
+    
+    X = np.array(X)
+    y = np.array(y)
+    
+    # 轉成 tensor
+    X_tensor = torch.FloatTensor(X)
+    y_tensor = torch.FloatTensor(y).unsqueeze(-1)
+    
+    # 建立模型
+    input_size = X_tensor.shape[2]
+    model = LSTMModel(input_size=input_size)
+    criterion = nn.MSELoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    
+    # 訓練
+    for epoch in range(epochs):
+        model.train()
+        optimizer.zero_grad()
+        output = model(X_tensor)
+        loss = criterion(output, y_tensor)
+        loss.backward()
+        optimizer.step()
+        if (epoch+1) % 10 == 0:
+            print(f"Epoch {epoch+1}/{epochs}, Loss: {loss.item():.6f}")
+    
+    # 保存模型（只存 state_dict + feature list + scaler 參數）
+    torch.save({
+        "model_state": model.state_dict(),
+        "input_size": input_size,
+        "hidden_size": model.lstm.hidden_size,
+        "num_layers": model.lstm.num_layers,
+        "feature_cols": feature_cols,
+        "scaler_X_min": scaler_X.min_,
+        "scaler_X_scale": scaler_X.scale_,
+        "scaler_y_min": scaler_y.min_,
+        "scaler_y_scale": scaler_y.scale_
+    }, model_path)
+    
+    print(f"模型已保存到 {model_path}")
+    
+    return model, scaler_X, scaler_y
+
+# -------------------------
+# 預測函式
+# -------------------------
+def predict_lstm(df, model_path, feature_cols, seq_len=10):
+    """
+    使用已保存模型預測
+    """
+    checkpoint = torch.load(model_path, map_location="cpu", weights_only=False)
+    # 重建模型架構
+    model = LSTMModel(
+        input_size=checkpoint["input_size"],
+        hidden_size=checkpoint["hidden_size"],
+        num_layers=checkpoint["num_layers"]
+    )
+    model.load_state_dict(checkpoint["model_state"])
+    model.eval()
+    
+    # 重建 scaler
+    scaler_X = MinMaxScaler()
+    scaler_X.min_ = checkpoint["scaler_X_min"]
+    scaler_X.scale_ = checkpoint["scaler_X_scale"]
+    
+    scaler_y = MinMaxScaler()
+    scaler_y.min_ = checkpoint["scaler_y_min"]
+    scaler_y.scale_ = checkpoint["scaler_y_scale"]
+    
+    # 取特徵欄位資料並標準化
+    data = df[feature_cols].select_dtypes(include=[np.number]).values
+    data_scaled = scaler_X.transform(data)
+    
+    # 取最後 seq_len 筆資料
+    if len(data_scaled) < seq_len:
+        raise ValueError(f"資料不足，需要至少 {seq_len} 筆資料")
+    recent_seq = data_scaled[-seq_len:]
+    X = torch.FloatTensor(recent_seq).unsqueeze(0)  # (1, seq_len, features)
+    
+    # 預測
+    with torch.no_grad():
+        pred_scaled = model(X).numpy()
+    
+    pred = scaler_y.inverse_transform(pred_scaled)[0][0]
+    print("預測值:", pred)
+    return pred
+'''
 
 def linearPre(data, select):
     # 假設這是一個簡單的線性回歸模型來預測消費趨勢
