@@ -13,10 +13,14 @@ matplotlib.rcParams['font.sans-serif'] = ['Noto Sans TC']
 matplotlib.rcParams['axes.unicode_minus'] = False
 
 
-def mechine_learning_model(data, select):
+def linearPre(data, select):
     # 假設這是一個簡單的線性回歸模型來預測消費趨勢
     for word in select['欄位']:
-        print(word)
+        inputData = data[word].values.reshape(-1, 1)
+    outputData = data['Sales'].values
+    model = LinearRegression()
+    model.fit(inputData, outputData)
+    return model
 
 
 st.set_page_config(page_title="消費趨勢智慧分析平台", layout="wide")
@@ -66,7 +70,6 @@ if page == "可預測消費趨勢模型":
 
         st.subheader("你選到的『行』：")
         st.dataframe(selected_rows)
-        mechine_learning_model(df, selected_rows)
         # 日期欄位處理
         # 日期欄位處理（自動辨識大小寫）
 
@@ -83,27 +86,28 @@ if page == "可預測消費趨勢模型":
 
         # 趨勢線回歸預測（支援大小寫與同義字）
         sales_cols = [col for col in df.columns if any(k in col.lower() for k in ['sale', 'sales', 'revenue', 'amount', 'profit', '銷售', '營收'])]
-        if sales_cols:
+        if st.button('開始預測'):
             sales_col = sales_cols[0]  # 抓第一個符合的欄位名稱
-            model = LinearRegression()
-            X = df[['time_index']]
-            y = df[sales_col]
-            model.fit(X, y)
+            model = linearPre(df, selected_rows)
             next_idx = [[len(df)]]
             prediction = model.predict(next_idx)[0]
-        
+            X = df[["time_index"]]
+            pre_low = prediction * 0.98
+            pre_high = prediction * 1.02
             # 畫圖
             fig, ax = plt.subplots(figsize=(8, 4))
             ax.plot(df['time_index'], df[sales_col], marker='o', label='實際銷售量')
             ax.plot(df['time_index'], model.predict(X), linestyle='--', color='orange', label='回歸趨勢線')
-            ax.scatter(len(df), prediction, color='red', label='下一期預測')
+            plt.vlines(x=len(df), ymin=pre_low, ymax=pre_high, color='red', label='下一期預測區間')
+            ax.scatter(len(df), pre_low, color='red')
+            ax.scatter(len(df), pre_high, color='red')
             ax.set_xlabel("時間")
             ax.set_ylabel("銷售量")
             ax.set_title("銷售趨勢預測")
             ax.legend()
             st.pyplot(fig)
         
-            st.success(f"📅 下一期預測銷售量：約為 **{prediction:.0f}** 單位")
+            st.success(f"📅 下一期預測銷售量：約為 **{pre_low:.0f}~{pre_high:.0f}** 單位")
         else:
             st.error("❌ 必須包含與銷售相關的欄位（如 'Sales', 'sale', '銷售額', '營收' 等）")
 
